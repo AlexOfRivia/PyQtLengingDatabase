@@ -9,7 +9,6 @@ from PyQt6.QtWidgets import QApplication, QWidget, QTableView, QHBoxLayout, QSta
 
 #This app will manage car lending records using a SQLite database and PyQt6 for the GUI.
 #edding, editing and deleting: customers, cars and lending records.
-#User authentication with hashed passwords.
 #But also there should be an option for showing a graph of lending statistics using matplotlib (plus options for choosing graph type using a combo box).
 #the graph should be updated in real time using QTimer
 #the graph must be shown in the app window (not in a separate window), preferably in the lendings view.
@@ -31,14 +30,6 @@ class CarLendingApp(QWidget):
             sys.exit(1)
         
         query = QSqlQuery()
-        query.exec("""
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT UNIQUE,
-                email TEXT UNIQUE,
-                current_lendings INTEGER
-            )
-        """)
         query.exec("""
             CREATE TABLE IF NOT EXISTS customers (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -106,15 +97,18 @@ class CarLendingApp(QWidget):
         customers_layout = QVBoxLayout()
         customers_widget.setLayout(customers_layout)
         
-        self.customers_table = QTableView()
+        self.customers_table = QTableView() #table to store customers
         self.customers_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         customers_layout.addWidget(self.customers_table)
         
         buttons_layout = QHBoxLayout()
+
+        #buttons
         add_button = QPushButton("Add Customer")
         edit_button = QPushButton("Edit Customer")
         delete_button = QPushButton("Delete Customer")
         buttons_layout.addWidget(add_button)
+
         buttons_layout.addWidget(edit_button)
         buttons_layout.addWidget(delete_button)
         customers_layout.addLayout(buttons_layout)
@@ -125,7 +119,7 @@ class CarLendingApp(QWidget):
         
         self.stacked_layout.addWidget(customers_widget)
         
-        self.load_customers_data()
+        self.load_record_data("customers")
 
     #initializing cars view
     def init_cars_view(self):
@@ -138,9 +132,12 @@ class CarLendingApp(QWidget):
         cars_layout.addWidget(self.cars_table)
         
         buttons_layout = QHBoxLayout()
+        
+        #buttons
         add_button = QPushButton("Add Car")
         edit_button = QPushButton("Edit Car")
         delete_button = QPushButton("Delete Car")
+
         buttons_layout.addWidget(add_button)
         buttons_layout.addWidget(edit_button)
         buttons_layout.addWidget(delete_button)
@@ -152,7 +149,7 @@ class CarLendingApp(QWidget):
         
         self.stacked_layout.addWidget(cars_widget)
         
-        self.load_cars_data()
+        self.load_record_data("cars")
         
     #initializing lendings view
     def init_lendings_view(self):
@@ -165,9 +162,12 @@ class CarLendingApp(QWidget):
         lendings_layout.addWidget(self.lendings_table)
         
         buttons_layout = QHBoxLayout()
+
+        #buttons
         add_button = QPushButton("Add Lending")
         edit_button = QPushButton("Edit Lending")
         delete_button = QPushButton("Delete Lending")
+
         buttons_layout.addWidget(add_button)
         buttons_layout.addWidget(edit_button)
         buttons_layout.addWidget(delete_button)
@@ -190,28 +190,10 @@ class CarLendingApp(QWidget):
         
         self.stacked_layout.addWidget(lendings_widget)
         
-        self.load_lendings_data()
-   
-    #method for showing lending graph
-    def show_lending_graph(self):
-        pass  
-
-    #methods for loading data from databse
-    def load_lendings_data(self):
-        pass
-
-    def load_cars_data(self):
-        pass
-
-    def load_customers_data(self):
-        model = QtSql.QSqlTableModel()
-        model.setTable("customers")
-        model.select()
-        self.customers_table.setModel(model)
+        self.load_record_data("lendings")
         
     #managing records methods
     def add_customer_record(self):
-        #customers: id, name, email
         #opening a dialog for adding a new customer record
         dialog = QDialog(self)
         dialog.setWindowTitle("Add Customer")
@@ -237,46 +219,49 @@ class CarLendingApp(QWidget):
         buttons_layout.addWidget(cancel_button)
         layout.addLayout(buttons_layout)
 
-        save_button.clicked.connect(lambda: self.save_new_customer(dialog, name_input.text(), email_input.text()))
+        save_button.clicked.connect(lambda: self.save_new_record(dialog, "customers", ["name", "email"], [name_input.text(), email_input.text()]))
         cancel_button.clicked.connect(dialog.reject)
         
         dialog.exec()
 
         #updating the customers table view
-        self.load_customers_data()
+        self.load_record_data("customers")
 
-    #saving new customer to database
-    def save_new_customer(self, dialog, name, email):
+    #universal method for saving new records to the database
+    def save_new_record(self, dialog, table, fields, values):
+        placeholders = ", ".join(["?"] * len(values))
+        query_str = f"INSERT INTO {table} ({', '.join(fields)}) VALUES ({placeholders})"
         query = QSqlQuery()
-        query.prepare("INSERT INTO customers (name, email) VALUES (?, ?)")
-        query.addBindValue(name)
-        query.addBindValue(email)
+        query.prepare(query_str)
+        for value in values:
+            query.addBindValue(value)
         if not query.exec():
-            print("Failed to add customer:", query.lastError().text())
+            print(f"Failed to add record to {table}:", query.lastError().text())
         else:
             dialog.accept()
-            self.load_customers_data()
+            self.load_record_data(table)
 
-    def edit_customer_record(self):
-        pass  # Implementation for editing a record
+    #universal method for loading data from a table
+    def load_record_data(self, table):
+        model = QtSql.QSqlTableModel()
+        model.setTable(table)
+        model.select()
+        if table == "customers":
+            self.customers_table.setModel(model)  
+        elif table == "cars":
+            self.cars_table.setModel(model)
+        elif table == "lendings":
+            self.lendings_table.setModel(model)  
+
+    def edit_record(self):
+        pass  #implementation for editing a record
     
-    def delete_customer_record(self):
-        pass  # Implementation for deleting a record
+    def delete_record(self):
+        pass  #implementation for deleting a record   
 
-    def add_car_record(self):
-        pass  # Implementation for adding a car record
-    def edit_car_record(self):
-        pass  # Implementation for editing a car record
-    def delete_car_record(self):
-        pass  # Implementation for deleting a car record
-    def add_lending_record(self):
-        pass  # Implementation for adding a car record
-    def edit_lending_record(self):
-        pass  # Implementation for editing a car record
-    def delete_lending_record(self):
-        pass  # Implementation for deleting a car record
-    
-
+    #method for showing lending graph
+    def show_lending_graph(self):
+        pass  #implementation for showing lending statistics graph
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
