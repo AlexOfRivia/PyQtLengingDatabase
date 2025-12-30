@@ -186,7 +186,7 @@ class CarLendingApp(QWidget):
         self.graph_type_combo.addItems(["Bar Chart", "Line Chart", "Pie Chart"])
         buttons_layout.addWidget(graph_button)
         buttons_layout.addWidget(self.graph_type_combo)
-        graph_button.clicked.connect(self.show_lending_graph()) #passing the graph type to the drawig function
+        graph_button.clicked.connect(lambda: self.show_lending_graph(self.graph_type_combo.currentText()))
         
         self.stacked_layout.addWidget(lendings_widget)
         
