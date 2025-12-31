@@ -9,6 +9,8 @@ from PyQt6.QtSql import QSqlQuery, QSqlDatabase
 from PyQt6.QtWidgets import QDateEdit, QApplication, QSpinBox, QWidget, QTableView, QHBoxLayout, QStackedLayout, QVBoxLayout, QLabel, QPushButton, QComboBox, QLineEdit, QAbstractItemView, QDialog
 from matplotlib.figure import Figure
 from matplotlib import pyplot as plt
+import colorsys
+from matplotlib import colors as mcolors
 
 class CarLendingApp(QWidget):
     def __init__(self):
@@ -168,7 +170,7 @@ class CarLendingApp(QWidget):
         self.graph_widget.setLayout(self.graph_layout)
         table_graph_layout.addWidget(self.graph_widget)
         
-        #Create figure and canvas once, reuse for updates
+        #creating figure and canvas once, reusing for updates
         self.fig = Figure(figsize=(5, 4), dpi=100)
         self.canvas = FigureCanvasQTAgg(self.fig)
         self.ax = self.fig.add_subplot(111)
@@ -179,10 +181,16 @@ class CarLendingApp(QWidget):
         self.graph_type_combo.addItems(["Bar Chart", "Pie Chart", "Line Graph"])
         self.graph_type_combo.currentTextChanged.connect(lambda: self.refresh_graph())
 
-        #Title customization input
+        #title customization input
         self.title_input = QLineEdit()
         self.title_input.setPlaceholderText("Custom Title (optional)")
         self.title_input.textChanged.connect(lambda: self.refresh_graph())
+
+        #color selector
+        self.color_combo = QComboBox()
+        #include a set of named colors and hex values
+        self.color_combo.addItems(["blue", "green", "orange", "red", "purple", "yellow"]) 
+        self.color_combo.currentTextChanged.connect(lambda: self.refresh_graph())
 
         #button for showing the graph
         self.show_graph_button = QPushButton("Show Lending Graph")
@@ -202,6 +210,8 @@ class CarLendingApp(QWidget):
         buttons_layout.addWidget(self.graph_type_combo)
         buttons_layout.addWidget(QLabel("Title:"))
         buttons_layout.addWidget(self.title_input)
+        buttons_layout.addWidget(QLabel("Color:"))
+        buttons_layout.addWidget(self.color_combo)
 
         lendings_layout.addLayout(buttons_layout)
         add_button.clicked.connect(self.add_lending_record)
@@ -738,6 +748,28 @@ class CarLendingApp(QWidget):
     def refresh_graph(self):
         self.show_lending_graph(self.graph_type_combo.currentText())
 
+    def _generate_color_tints(self, base_color, n):
+        """Return n RGB tuples (0-1) as tints of base_color."""
+        try:
+            rgb = mcolors.to_rgb(base_color)
+        except Exception:
+            # fallback to a default blue
+            rgb = (0.2, 0.4, 0.8)
+
+        h, s, v = colorsys.rgb_to_hsv(*rgb)
+        tints = []
+        if n <= 1:
+            return [rgb]
+        for i in range(n):
+            frac = i / (n - 1)
+            # vary brightness from darker to lighter
+            new_v = 0.4 + 0.6 * frac
+            # slightly change saturation for contrast
+            new_s = max(0.2, s * (0.6 + 0.4 * (1 - frac)))
+            new_rgb = colorsys.hsv_to_rgb(h, new_s, new_v)
+            tints.append(new_rgb)
+        return tints
+
     #----------------------------------------------------------------------------------
 
 
@@ -759,18 +791,29 @@ class CarLendingApp(QWidget):
             else:
                 self.ax.set_title("Lendings")
         else:
+            # determine selected color
+            sel_color = None
+            if hasattr(self, 'color_combo'):
+                sel_color = self.color_combo.currentText()
+            if not sel_color:
+                sel_color = 'tab:blue'
+
             if graph_type == "Bar Chart":
-                self.ax.bar(dates, counts, color='blue')
+                self.ax.bar(dates, counts, color=sel_color)
                 title = custom_title if custom_title else "Lendings per Date - Bar Chart"
                 self.ax.set_title(title)
                 self.ax.set_xlabel("Date")
                 self.ax.set_ylabel("Number of Lendings")
             elif graph_type == "Pie Chart":
-                self.ax.pie(counts, labels=dates, autopct='%1.1f%%', startangle=140)
+                try:
+                    colors = self._generate_color_tints(sel_color, len(counts))
+                except Exception:
+                    colors = [sel_color for _ in counts]
+                self.ax.pie(counts, labels=dates, autopct='%1.1f%%', startangle=140, colors=colors)
                 title = custom_title if custom_title else "Lendings Distribution - Pie Chart"
                 self.ax.set_title(title)
             elif graph_type == "Line Graph":
-                self.ax.plot(dates, counts, marker='o', linestyle='-', color='green')
+                self.ax.plot(dates, counts, marker='o', linestyle='-', color=sel_color)
                 title = custom_title if custom_title else "Lendings per Date - Line Graph"
                 self.ax.set_title(title)
                 self.ax.set_xlabel("Date")
