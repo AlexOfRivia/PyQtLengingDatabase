@@ -128,12 +128,12 @@ class CarLendingApp(QWidget):
         self.stacked_layout = QStackedLayout() #stackedlayout for "storing" the views
         main_layout.addLayout(button_layout)
         main_layout.addLayout(self.stacked_layout)
-        # make stacked area expand to fill window
+        #making stacked area expand to fill window
         main_layout.setStretch(0, 0)
         main_layout.setStretch(1, 1)
         self.setLayout(main_layout)
 
-        # apply dark rounded stylesheet
+        #applying dark rounded stylesheet
         try:
             self.apply_stylesheet()
         except Exception:
@@ -244,11 +244,19 @@ class CarLendingApp(QWidget):
         
         #creating figure and canvas once, reusing for updates
         self.fig = Figure(figsize=(5, 4), dpi=100)
+        #setting figure background to match dark UI
+        self.fig.patch.set_facecolor('#1e1e1e')
         self.canvas = FigureCanvasQTAgg(self.fig)
         self.canvas.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.canvas.setMinimumWidth(420)
         self.canvas.setMinimumHeight(320)
         self.ax = self.fig.add_subplot(111)
+        #setting axes background to dark and default text color
+        self.ax.set_facecolor('#1e1e1e')
+        self.ax.tick_params(colors='#d4d7db', which='both')
+        self.ax.xaxis.label.set_color('#d4d7db')
+        self.ax.yaxis.label.set_color('#d4d7db')
+        self.ax.title.set_color('#e0e0e0')
         self.graph_layout.addWidget(self.canvas)
 
         #combobox for selecting graph type
@@ -840,7 +848,7 @@ class CarLendingApp(QWidget):
         try:
             rgb = mcolors.to_rgb(base_color)
         except Exception:
-            # fallback to a default blue
+            #fallback to a default blue
             rgb = (0.2, 0.4, 0.8)
 
         h, s, v = colorsys.rgb_to_hsv(*rgb)
@@ -849,9 +857,9 @@ class CarLendingApp(QWidget):
             return [rgb]
         for i in range(n):
             frac = i / (n - 1)
-            # vary brightness from darker to lighter
+            #varying brightness from darker to lighter
             new_v = 0.4 + 0.6 * frac
-            # slightly change saturation for contrast
+            #slightly changing saturation for contrast
             new_s = max(0.2, s * (0.6 + 0.4 * (1 - frac)))
             new_rgb = colorsys.hsv_to_rgb(h, new_s, new_v)
             tints.append(new_rgb)
@@ -867,6 +875,12 @@ class CarLendingApp(QWidget):
 
         #clearing axes and redraw
         self.ax.clear()
+        #ensuring axes use dark background and light text on each redraw
+        self.ax.set_facecolor('#1e1e1e')
+        self.ax.tick_params(colors='#d4d7db', which='both')
+        self.ax.xaxis.label.set_color('#d4d7db')
+        self.ax.yaxis.label.set_color('#d4d7db')
+        self.ax.title.set_color('#e0e0e0')
 
         #getting custom title or using default
         custom_title = self.title_input.text().strip() if hasattr(self, 'title_input') else ""
@@ -878,7 +892,7 @@ class CarLendingApp(QWidget):
             else:
                 self.ax.set_title("Lendings")
         else:
-            # determine selected color
+            #determining selected color
             sel_color = None
             if hasattr(self, 'color_combo'):
                 sel_color = self.color_combo.currentText()
@@ -886,17 +900,23 @@ class CarLendingApp(QWidget):
                 sel_color = 'tab:blue'
 
             if graph_type == "Bar Chart":
-                self.ax.bar(dates, counts, color=sel_color)
+                bars = self.ax.bar(dates, counts, color=sel_color)
                 title = custom_title if custom_title else "Lendings per Date - Bar Chart"
                 self.ax.set_title(title)
                 self.ax.set_xlabel("Date")
                 self.ax.set_ylabel("Number of Lendings")
+                #ensuring tick and label colors are readable on dark background
+                self.ax.tick_params(axis='x', colors='#d4d7db')
+                self.ax.tick_params(axis='y', colors='#d4d7db')
+                self.ax.xaxis.label.set_color('#d4d7db')
+                self.ax.yaxis.label.set_color('#d4d7db')
             elif graph_type == "Pie Chart":
                 try:
                     colors = self._generate_color_tints(sel_color, len(counts))
                 except Exception:
                     colors = [sel_color for _ in counts]
-                self.ax.pie(counts, labels=dates, autopct='%1.1f%%', startangle=140, colors=colors)
+                #using textprops so labels and percents are light on dark bg
+                self.ax.pie(counts, labels=dates, autopct='%1.1f%%', startangle=140, colors=colors, textprops={'color':'#e0e0e0'})
                 title = custom_title if custom_title else "Lendings Distribution - Pie Chart"
                 self.ax.set_title(title)
             elif graph_type == "Line Graph":
@@ -905,6 +925,8 @@ class CarLendingApp(QWidget):
                 self.ax.set_title(title)
                 self.ax.set_xlabel("Date")
                 self.ax.set_ylabel("Number of Lendings")
+                self.ax.tick_params(axis='x', colors='#d4d7db')
+                self.ax.tick_params(axis='y', colors='#d4d7db')
 
         try:
             self.fig.tight_layout()
