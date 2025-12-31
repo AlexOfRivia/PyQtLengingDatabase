@@ -1,27 +1,28 @@
 import sys
-
 from PyQt6 import QtCore
 import bcrypt
 import json
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationToolbar2QT
 from PyQt6 import QtSql
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtSql import QSqlQuery, QSqlDatabase 
-from PyQt6.QtWidgets import QDateEdit, QApplication, QSpinBox, QWidget, QTableView, QHBoxLayout, QStackedLayout, QStackedWidget, QVBoxLayout, QLabel, QPushButton, QComboBox, QLineEdit, QAbstractItemView, QDialog
-
-#This app will manage car lending records using a SQLite database and PyQt6 for the GUI.
-#edding, editing and deleting: customers, cars and lending records.
-#But also there should be an option for showing a graph of lending statistics using matplotlib (plus options for choosing graph type using a combo box).
-#the graph should be updated in real time using QTimer
-#the graph must be shown in the app window (not in a separate window), preferably in the lendings view.
+from PyQt6.QtWidgets import QDateEdit, QApplication, QSpinBox, QWidget, QTableView, QHBoxLayout, QStackedLayout, QVBoxLayout, QLabel, QPushButton, QComboBox, QLineEdit, QAbstractItemView, QDialog
+from matplotlib.figure import Figure
+from matplotlib import pyplot as plt
 
 class CarLendingApp(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Car Lending Management System")
-        self.setGeometry(100, 100, 800, 600)
+        self.setGeometry(100, 100, 1200, 600)
         
         self.db = self.init_db()
+        
+        #initializing the timer for real-time graph updates
+        self.graph_timer = QTimer(self)
+        self.graph_timer.setInterval(2000) #every 2 secs
+        self.graph_timer.timeout.connect(self.refresh_graph)
+        
         self.init_ui()
         
     def init_db(self):
@@ -62,11 +63,6 @@ class CarLendingApp(QWidget):
         return db
     
     def init_ui(self):
-        #implementing also other buttons for different views (customers, cars, lendings)
-        #the ui should have switching between different views (customers, cars, lendings)
-        #in the lendings view there should be also a button for showing a graph of lending statistics using matplotlib (plus options for choosing graph type using a combo box).
-        #view could be implemented using stackedLayout
-        #alco should be buttons on top for switching between views
         main_layout = QVBoxLayout()
         button_layout = QHBoxLayout() #layout for buttons used to switch between tabs
         self.stacked_layout = QStackedLayout() #stackedlayout for "storing" the views
@@ -158,11 +154,39 @@ class CarLendingApp(QWidget):
         lendings_widget = QWidget()
         lendings_layout = QVBoxLayout()
         lendings_widget.setLayout(lendings_layout)
-        
+
+        table_graph_layout = QHBoxLayout()
+        lendings_layout.addLayout(table_graph_layout)
+    
         self.lendings_table = QTableView()
         self.lendings_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        lendings_layout.addWidget(self.lendings_table)
+        table_graph_layout.addWidget(self.lendings_table)
+
+        #graph area with embedded canvas
+        self.graph_widget = QWidget()
+        self.graph_layout = QVBoxLayout()
+        self.graph_widget.setLayout(self.graph_layout)
+        table_graph_layout.addWidget(self.graph_widget)
         
+        #Create figure and canvas once, reuse for updates
+        self.fig = Figure(figsize=(5, 4), dpi=100)
+        self.canvas = FigureCanvasQTAgg(self.fig)
+        self.ax = self.fig.add_subplot(111)
+        self.graph_layout.addWidget(self.canvas)
+
+        #combobox for selecting graph type
+        self.graph_type_combo = QComboBox()
+        self.graph_type_combo.addItems(["Bar Chart", "Pie Chart", "Line Graph"])
+        self.graph_type_combo.currentTextChanged.connect(lambda: self.refresh_graph())
+
+        #Title customization input
+        self.title_input = QLineEdit()
+        self.title_input.setPlaceholderText("Custom Title (optional)")
+        self.title_input.textChanged.connect(lambda: self.refresh_graph())
+
+        #button for showing the graph
+        self.show_graph_button = QPushButton("Show Lending Graph")
+        self.show_graph_button.clicked.connect(lambda: self.refresh_graph())
         buttons_layout = QHBoxLayout()
 
         #buttons
@@ -173,24 +197,23 @@ class CarLendingApp(QWidget):
         buttons_layout.addWidget(add_button)
         buttons_layout.addWidget(edit_button)
         buttons_layout.addWidget(delete_button)
+        buttons_layout.addWidget(self.show_graph_button)
+        buttons_layout.addWidget(QLabel("Type:"))
+        buttons_layout.addWidget(self.graph_type_combo)
+        buttons_layout.addWidget(QLabel("Title:"))
+        buttons_layout.addWidget(self.title_input)
+
         lendings_layout.addLayout(buttons_layout)
-        
         add_button.clicked.connect(self.add_lending_record)
         edit_button.clicked.connect(self.edit_lending_record)
         delete_button.clicked.connect(self.delete_lending_record)
-
-        #graph button and combo box for choosing graph type
-        #FigureCanvasQTAgg for embedding matplotlib graph in PyQt6
-        graph_button = QPushButton("Show Lending Statistics Graph")
-        self.graph_type_combo = QComboBox()
-        self.graph_type_combo.addItems(["Bar Chart", "Line Chart", "Pie Chart"])
-        buttons_layout.addWidget(graph_button)
-        buttons_layout.addWidget(self.graph_type_combo)
-        graph_button.clicked.connect(lambda: self.show_lending_graph(self.graph_type_combo.currentText()))
-        
         self.stacked_layout.addWidget(lendings_widget)
         
         self.load_record_data("lendings")
+        
+        #Start auto-refresh
+        self.graph_timer.start()
+
 
 
     #----------------------customer methods----------------------------
@@ -701,46 +724,63 @@ class CarLendingApp(QWidget):
 
     #----------------------------------------------------------------------------------
 
-
-    #method for showing lending graph
-    def show_lending_graph(self, graph_type):
-        #using the FigureCanvasQTAgg, NavigationToolbar2QT from matplotlib.backends.backend_qt5agg
-
-        #fetching lending data from the database
+    #helper forfetching graph data
+    def update_graph_data(self):
         query = QSqlQuery("SELECT lending_date, COUNT(*) as count FROM lendings GROUP BY lending_date")
         dates = []
         counts = []
         while query.next():
             dates.append(query.value(0))
             counts.append(query.value(1))
-        #creating the matplotlib figure
-        from matplotlib.figure import Figure
-        fig = Figure(figsize=(5, 4), dpi=100)
-        ax = fig.add_subplot(111)
-        if graph_type == "Bar Chart":
-            ax.bar(dates, counts)
-        elif graph_type == "Line Chart":
-            ax.plot(dates, counts)
-        elif graph_type == "Pie Chart":
-            ax.pie(counts, labels=dates, autopct='%1.1f%%')
-        ax.set_title("Lending Statistics")
-        ax.set_xlabel("Lending Date")
-        ax.set_ylabel("Number of Lendings")
-        #embedding the figure in the PyQt6 application
-        canvas = FigureCanvasQTAgg(fig)
-        toolbar = NavigationToolbar2QT(canvas, self)
-        graph_dialog = QDialog(self)
-        graph_dialog.setWindowTitle("Lending Statistics Graph")
-        graph_layout = QVBoxLayout()
-        graph_dialog.setLayout(graph_layout)
-        graph_layout.addWidget(toolbar)
-        graph_layout.addWidget(canvas)
-        
-        graph_dialog.exec()
+        return dates, counts
+
+    #refreshing the graph display
+    def refresh_graph(self):
+        self.show_lending_graph(self.graph_type_combo.currentText())
+
+    #----------------------------------------------------------------------------------
 
 
-        
-        
+    #method for showing lending graph
+    def show_lending_graph(self, graph_type):
+        #fetching data
+        dates, counts = self.update_graph_data()
+
+        #clearing axes and redraw
+        self.ax.clear()
+
+        #getting custom title or using default
+        custom_title = self.title_input.text().strip() if hasattr(self, 'title_input') else ""
+
+        if not dates or sum(counts) == 0:
+            self.ax.text(0.5, 0.5, "No lending data available", ha='center', va='center')
+            if custom_title:
+                self.ax.set_title(custom_title)
+            else:
+                self.ax.set_title("Lendings")
+        else:
+            if graph_type == "Bar Chart":
+                self.ax.bar(dates, counts, color='blue')
+                title = custom_title if custom_title else "Lendings per Date - Bar Chart"
+                self.ax.set_title(title)
+                self.ax.set_xlabel("Date")
+                self.ax.set_ylabel("Number of Lendings")
+            elif graph_type == "Pie Chart":
+                self.ax.pie(counts, labels=dates, autopct='%1.1f%%', startangle=140)
+                title = custom_title if custom_title else "Lendings Distribution - Pie Chart"
+                self.ax.set_title(title)
+            elif graph_type == "Line Graph":
+                self.ax.plot(dates, counts, marker='o', linestyle='-', color='green')
+                title = custom_title if custom_title else "Lendings per Date - Line Graph"
+                self.ax.set_title(title)
+                self.ax.set_xlabel("Date")
+                self.ax.set_ylabel("Number of Lendings")
+
+        try:
+            self.fig.tight_layout()
+        except Exception:
+            pass
+        self.canvas.draw()     
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
