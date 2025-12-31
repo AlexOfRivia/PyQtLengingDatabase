@@ -6,7 +6,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationTool
 from PyQt6 import QtSql
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtSql import QSqlQuery, QSqlDatabase 
-from PyQt6.QtWidgets import QDateEdit, QApplication, QSpinBox, QWidget, QTableView, QHBoxLayout, QStackedLayout, QVBoxLayout, QLabel, QPushButton, QComboBox, QLineEdit, QAbstractItemView, QDialog
+from PyQt6.QtWidgets import QDateEdit, QApplication, QSpinBox, QWidget, QTableView, QHBoxLayout, QStackedLayout, QVBoxLayout, QLabel, QPushButton, QComboBox, QLineEdit, QAbstractItemView, QDialog, QSizePolicy, QHeaderView
 from matplotlib.figure import Figure
 from matplotlib import pyplot as plt
 import colorsys
@@ -63,6 +63,64 @@ class CarLendingApp(QWidget):
         """)
         
         return db
+
+    def apply_stylesheet(self):
+        """Apply a sleek dark stylesheet with rounded corners."""
+        style = """
+        QWidget {
+            background-color: #121212;
+            color: #e0e0e0;
+            font-family: "Segoe UI", Roboto, Arial, sans-serif;
+            font-size: 12px;
+        }
+        QListView, QTreeView {
+            background-color: #1e1e1e;
+            border: 1px solid #2a2a2a;
+            selection-background-color: #2a76d2;
+            border-radius: 8px;
+            gridline-color: #2a2a2a;
+        }
+        QTableView {
+            background-color: #1e1e1e;
+            border: 1px solid #2a2a2a;
+            selection-background-color: #2a76d2;
+            border-radius: 0px;
+            gridline-color: #2a2a2a;
+        }
+        QPushButton {
+            background-color: #1f2933;
+            color: #e6eef8;
+            border: 1px solid #2f3a45;
+            padding: 6px 12px;
+            border-radius: 10px;
+        }
+        QPushButton:hover { background-color: #26313b; }
+        QPushButton:pressed { background-color: #1b2227; }
+        QComboBox, QLineEdit, QSpinBox, QDateEdit {
+            background-color: #161616;
+            color: #e0e0e0;
+            border: 1px solid #2a2a2a;
+            padding: 5px;
+            border-radius: 8px;
+        }
+        QLabel { color: #d4d7db; }
+        QHeaderView::section { background-color: #1e1e1e; color: #cfd8e3; border: none; border-radius: 0px; }
+        QMenuBar { background-color: transparent; }
+        QDialog { background-color: #141414; }
+        QScrollBar:vertical {
+            background: #151515;
+            width: 10px;
+            margin: 0px 0px 0px 0px;
+            border-radius: 5px;
+        }
+        QScrollBar::handle:vertical {
+            background: #2a2a2a;
+            min-height: 20px;
+            border-radius: 5px;
+        }
+        QToolTip { background-color: #2a2a2a; color: #f0f0f0; border: 1px solid #3a3a3a; }
+        """
+        self.setStyleSheet(style)
     
     def init_ui(self):
         main_layout = QVBoxLayout()
@@ -70,7 +128,16 @@ class CarLendingApp(QWidget):
         self.stacked_layout = QStackedLayout() #stackedlayout for "storing" the views
         main_layout.addLayout(button_layout)
         main_layout.addLayout(self.stacked_layout)
+        # make stacked area expand to fill window
+        main_layout.setStretch(0, 0)
+        main_layout.setStretch(1, 1)
         self.setLayout(main_layout)
+
+        # apply dark rounded stylesheet
+        try:
+            self.apply_stylesheet()
+        except Exception:
+            pass
 
         customers_button = QPushButton("Customers")
         cars_button = QPushButton("Cars")
@@ -99,7 +166,8 @@ class CarLendingApp(QWidget):
         
         self.customers_table = QTableView() #table to store customers
         self.customers_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        customers_layout.addWidget(self.customers_table)
+        self.customers_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        customers_layout.addWidget(self.customers_table, 1)
         
         buttons_layout = QHBoxLayout()
 
@@ -129,7 +197,8 @@ class CarLendingApp(QWidget):
         
         self.cars_table = QTableView()
         self.cars_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        cars_layout.addWidget(self.cars_table)
+        self.cars_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        cars_layout.addWidget(self.cars_table, 1)
         
         buttons_layout = QHBoxLayout()
         
@@ -162,17 +231,23 @@ class CarLendingApp(QWidget):
     
         self.lendings_table = QTableView()
         self.lendings_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        table_graph_layout.addWidget(self.lendings_table)
+        self.lendings_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        #give the graph more horizontal space (table:graph = 1:2)
+        table_graph_layout.addWidget(self.lendings_table, 1)
 
         #graph area with embedded canvas
         self.graph_widget = QWidget()
         self.graph_layout = QVBoxLayout()
         self.graph_widget.setLayout(self.graph_layout)
-        table_graph_layout.addWidget(self.graph_widget)
+        self.graph_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        table_graph_layout.addWidget(self.graph_widget, 1)
         
         #creating figure and canvas once, reusing for updates
         self.fig = Figure(figsize=(5, 4), dpi=100)
         self.canvas = FigureCanvasQTAgg(self.fig)
+        self.canvas.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.canvas.setMinimumWidth(420)
+        self.canvas.setMinimumHeight(320)
         self.ax = self.fig.add_subplot(111)
         self.graph_layout.addWidget(self.canvas)
 
@@ -699,11 +774,23 @@ class CarLendingApp(QWidget):
         model.setTable(table)
         model.select()
         if table == "customers":
-            self.customers_table.setModel(model)  
+            self.customers_table.setModel(model)
+            try:
+                self.customers_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+            except Exception:
+                pass
         elif table == "cars":
             self.cars_table.setModel(model)
+            try:
+                self.cars_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+            except Exception:
+                pass
         elif table == "lendings":
-            self.lendings_table.setModel(model)  
+            self.lendings_table.setModel(model)
+            try:
+                self.lendings_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+            except Exception:
+                pass
 
     #universal method for editing records in the database
     def edit_record(self, dialog, table, record_id, fields, values):
